@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Révision — Graphes & Ordonnancement</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:#f5f5f2;color:#1a1a18;min-height:100vh}
+:root{--bg:#fff;--bg2:#f5f5f2;--bg3:#ebebea;--text:#1a1a18;--text2:#666;--border:rgba(0,0,0,0.12);--radius:10px}
+@media(prefers-color-scheme:dark){:root{--bg:#1e1e1c;--bg2:#2a2a28;--bg3:#333330;--text:#f0efe8;--text2:#999;--border:rgba(255,255,255,0.1)}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useEffect,useRef,useCallback}=React;
+
+const C={
+  purple:{bg:"#EEEDFE",bd:"#7F77DD",tx:"#3C3489",dk:"#26215C"},
+  teal:{bg:"#E1F5EE",bd:"#1D9E75",tx:"#085041",dk:"#04342C"},
+  coral:{bg:"#FAECE7",bd:"#D85A30",tx:"#712B13",dk:"#4A1B0C"},
+  blue:{bg:"#E6F1FB",bd:"#378ADD",tx:"#0C447C",dk:"#042C53"},
+  amber:{bg:"#FAEEDA",bd:"#BA7517",tx:"#633806",dk:"#412402"},
+  green:{bg:"#EAF3DE",bd:"#639922",tx:"#27500A",dk:"#173404"},
+};
+
+const CHAPTERS=[
+  {id:"graphes-bases",title:"Graphes orientés",sub:"Sommets, arcs & représentations",icon:"◎",color:"purple",xp:100,diff:"débutant",n:6},
+  {id:"matrices",title:"Matrices adjacentes",sub:"Opérations booléennes & puissances",icon:"⊞",color:"blue",xp:150,diff:"intermédiaire",n:5},
+  {id:"fermeture",title:"Fermeture transitive",sub:"Chemins indirects & accessibilité",icon:"↺",color:"teal",xp:150,diff:"intermédiaire",n:4},
+  {id:"pert",title:"Méthode PERT / MPM",sub:"Ordonnancement & chemin critique",icon:"▶",color:"coral",xp:200,diff:"avancé",n:7},
+];
+
+const LG={
+  title:"Graphes orientés",color:"purple",
+  sections:[
+    {id:"accroche",label:"Mise en situation",type:"hook",
+     content:{
+       question:"Comment modéliser un réseau de villes reliées par des routes à sens unique ?",
+       context:"Chaque ville = un sommet, chaque route = un arc orienté. Bienvenue dans les graphes !",
+       nodes:[{id:"A",x:100,y:90},{id:"B",x:260,y:55},{id:"C",x:380,y:130},{id:"D",x:190,y:190},{id:"E",x:330,y:210}],
+       edges:[{f:"A",t:"B"},{f:"A",t:"D"},{f:"B",t:"C"},{f:"B",t:"D"},{f:"D",t:"E"},{f:"C",t:"E"},{f:"A",t:"A"}],
+     }},
+    {id:"definitions",label:"Définitions clés",type:"learn",
+     cards:[
+       {term:"Sommet",sym:"•",def:"Un nœud (point) du graphe. Ex : une ville, une tâche.",color:"purple"},
+       {term:"Arc",sym:"→",def:"Flèche orientée entre deux sommets. Ex : route à sens unique.",color:"blue"},
+       {term:"Chemin",sym:"⤳",def:"Suite ordonnée de sommets reliés par des arcs. Ex : (A,B,C).",color:"teal"},
+       {term:"Circuit",sym:"↺",def:"Chemin dont le départ = arrivée. Ex : (B,D,C,B).",color:"coral"},
+       {term:"Boucle",sym:"⊙",def:"Arc (A,A) qui repart du même sommet.",color:"amber"},
+       {term:"Hamiltonien",sym:"★",def:"Chemin passant exactement une fois par TOUS les sommets.",color:"green"},
+     ]},
+    {id:"predecesseurs",label:"Prédécesseurs & Successeurs",type:"igraph",
+     graph:{
+       nodes:[{id:"A",x:80,y:120},{id:"B",x:230,y:65},{id:"C",x:230,y:175},{id:"D",x:370,y:120}],
+       edges:[{f:"A",t:"A"},{f:"A",t:"B"},{f:"A",t:"C"},{f:"A",t:"D"},{f:"B",t:"D"},{f:"D",t:"C"},{f:"C",t:"B"}],
+       table:{A:{s:["A","B","C","D"],p:["A"]},B:{s:["D"],p:["A","C"]},C:{s:["B"],p:["A","D"]},D:{s:["C"],p:["A","B"]}},
+     }},
+    {id:"matrice",label:"Matrice adjacente",type:"matrix",
+     nodes:["A","B","C","D"],
+     sol:[[1,1,1,1],[0,0,0,1],[0,1,0,0],[0,0,1,0]],
+     exp:"La case (i,j)=1 s'il existe un arc direct de i vers j, 0 sinon."},
+    {id:"quiz",label:"Mini Quiz",type:"quiz",
+     questions:[
+       {q:"Qu'est-ce qu'un circuit dans un graphe ?",ans:["Un chemin par tous les sommets","Un chemin départ=arrivée","Un arc dans les deux sens","Une boucle sur un sommet"],ok:1,exp:"Un circuit revient au point de départ. Ex : (B,D,C,B)."},
+       {q:"Un '1' dans la matrice adjacente signifie ?",ans:["La longueur de l'arc","Un chemin de longueur n","Un arc direct entre deux sommets","La valeur du sommet"],ok:2,exp:"1 en (i,j) = arc direct de i vers j."},
+       {q:"Un graphe simple orienté est un graphe...",ans:["Sans circuit","Sans arcs","Avec arcs dans les deux sens","Toujours complet"],ok:0,exp:"Sans circuit (ni boucle) → peut être ordonné par niveaux."},
+       {q:"Le chemin (A,B,D,C) dans {A,B,C,D} est hamiltonien ?",ans:["Oui : passe une fois par chaque sommet","Non : revient au départ","Non : contient une boucle","Oui mais seulement si c'est un circuit"],ok:0,exp:"Il passe une seule fois par A, B, D et C → hamiltonien ✓"},
+       {q:"G={(A,B),(B,C),(C,A),(A,A)} a combien d'arcs ?",ans:["3","4","5","2"],ok:1,exp:"4 arcs : (A,B),(B,C),(C,A) et la boucle (A,A)."},
+     ]},
+    {id:"dst",label:"Mode avant DST",type:"dst",
+     points:[
+       {icon:"•",tx:"Sommets = points / Arcs = flèches orientées"},
+       {icon:"→",tx:"Chemin : suite de sommets reliés par des arcs"},
+       {icon:"↺",tx:"Circuit = chemin qui revient au point de départ"},
+       {icon:"⊙",tx:"Boucle = arc (A,A) qui repart du même sommet"},
+       {icon:"⊞",tx:"Matrice M : mij = 1 si arc de i→j, 0 sinon"},
+       {icon:"★",tx:"Chemin hamiltonien = passe une fois par TOUS les sommets"},
+     ]},
+  ],
+};
+
+const LP={
+  title:"Méthode PERT / MPM",color:"coral",
+  sections:[
+    {id:"intro",label:"C'est quoi PERT ?",type:"hook",
+     content:{
+       question:"Comment construire un projet de 10 tâches en un minimum de temps ?",
+       context:"PERT (1958) ordonne des tâches interdépendantes pour trouver la durée minimale d'un projet.",
+       nodes:[{id:"Déb",x:55,y:120},{id:"a:1",x:160,y:60},{id:"b:2",x:160,y:180},{id:"d:3",x:160,y:300},{id:"e:4",x:280,y:60},{id:"f:1",x:280,y:180},{id:"c:6",x:280,y:300},{id:"Fin",x:400,y:180}],
+       edges:[{f:"Déb",t:"a:1"},{f:"Déb",t:"b:2"},{f:"Déb",t:"d:3"},{f:"a:1",t:"e:4"},{f:"b:2",t:"f:1"},{f:"d:3",t:"c:6"},{f:"e:4",t:"Fin"},{f:"f:1",t:"Fin"},{f:"c:6",t:"Fin"}],
+     }},
+    {id:"methode",label:"Les 4 étapes",type:"learn",
+     cards:[
+       {term:"Étape 1",sym:"①",def:"Ordonner les tâches par niveaux via le tableau d'antériorité.",color:"coral"},
+       {term:"Étape 2",sym:"②",def:"Tracer le graphe MPM avec cases [Nom:Durée | tôt | tard].",color:"blue"},
+       {term:"Étape 3",sym:"③",def:"Date tôt : avancer gauche→droite (max des prédécesseurs). Date tard : reculer droite→gauche (min des successeurs).",color:"teal"},
+       {term:"Étape 4",sym:"④",def:"Chemin critique = succession de tâches avec marge totale = 0.",color:"amber"},
+       {term:"Marge totale",sym:"MT",def:"MT = date tard − date tôt. Retard max sans retarder le projet.",color:"purple"},
+       {term:"Marge libre",sym:"ML",def:"ML = min(date tôt suivant) − date tôt − durée.",color:"green"},
+     ]},
+    {id:"quiz",label:"Mini Quiz PERT",type:"quiz",
+     questions:[
+       {q:"Qu'est-ce que le chemin critique ?",ans:["Le chemin le plus court","Tâches avec marge totale = 0","La première tâche","Tâches en parallèle"],ok:1,exp:"MT=0 sur le chemin critique : tout retard retarde le projet."},
+       {q:"Comment calcule-t-on la date au plus tôt de J ?",ans:["Durée J × nb tâches","Max(tôt prédécesseur + durée prédécesseur)","Min(tard successeur − durée J)","Somme des durées précédentes"],ok:1,exp:"Date tôt(J) = max des (tôt(L)+durée(L)) pour chaque prédécesseur L."},
+       {q:"Tâche A : date tôt=3, date tard=7. Sa marge totale ?",ans:["3","4","7","10"],ok:1,exp:"MT = tard − tôt = 7−3 = 4 jours."},
+       {q:"Une tâche critique a une marge totale de ?",ans:["1","0","−1","Variable"],ok:1,exp:"MT=0 sur le chemin critique : tout retard se répercute."},
+     ]},
+    {id:"dst",label:"Mode avant DST",type:"dst",
+     points:[
+       {icon:"①",tx:"Niveaux : sans prédécesseur = niveau 0, puis itérer"},
+       {icon:"②",tx:"Graphe MPM : cases [Tâche:durée | tôt | tard]"},
+       {icon:"③",tx:"Date tôt = max(tôt prédécesseur + durée prédécesseur)"},
+       {icon:"④",tx:"Date tard = min(tard successeur − durée tâche)"},
+       {icon:"MT",tx:"Marge totale = tard − tôt"},
+       {icon:"★",tx:"Chemin critique = tâches avec MT = 0"},
+     ]},
+  ],
+};
+
+function useXP(){
+  const[xp,setXP]=useState(()=>+localStorage.getItem("_xp")||0);
+  const[badges,setBadges]=useState(()=>JSON.parse(localStorage.getItem("_b")||"[]"));
+  const lv=Math.floor(xp/100)+1;
+  const add=useCallback((amt,badge)=>{
+    setXP(p=>{const n=p+amt;localStorage.setItem("_xp",n);return n;});
+    if(badge){setBadges(p=>{if(p.includes(badge))return p;const n=[...p,badge];localStorage.setItem("_b",JSON.stringify(n));return n;});}
+  },[]);
+  return{xp,lv,badges,add};
+}
+
+function Arrow({n1,n2,hi}){
+  if(!n1||!n2)return null;
+  const self=n1===n2;
+  if(self){
+    return<path d={`M${n1.x-12},${n1.y-18} C${n1.x-35},${n1.y-55} ${n1.x+35},${n1.y-55} ${n1.x+12},${n1.y-18}`}
+      fill="none" stroke={hi?"#D85A30":"#7F77DD"} strokeWidth={hi?2.5:1.5} markerEnd={`url(#a${hi?"h":""})`} opacity={hi?1:0.65}/>;
+  }
+  const dx=n2.x-n1.x,dy=n2.y-n1.y,len=Math.sqrt(dx*dx+dy*dy);
+  const ux=dx/len,uy=dy/len,r=22;
+  const sx=n1.x+ux*r,sy=n1.y+uy*r,ex=n2.x-ux*(r+7),ey=n2.y-uy*(r+7);
+  const mx=(sx+ex)/2-uy*15,my=(sy+ey)/2+ux*15;
+  return<path d={`M${sx},${sy} Q${mx},${my} ${ex},${ey}`}
+    fill="none" stroke={hi?"#D85A30":"#7F77DD"} strokeWidth={hi?2.5:1.5} markerEnd={`url(#a${hi?"h":""})`} opacity={hi?1:0.65}/>;
+}
+
+function GViz({nodes,edges,hi,onC}){
+  const nm=Object.fromEntries(nodes.map(n=>[n.id,n]));
+  const W=Math.max(...nodes.map(n=>n.x))+70,H=Math.max(...nodes.map(n=>n.y))+55;
+  return(
+    <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",maxHeight:300}}>
+      <defs>
+        <marker id="a" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0L0,6L8,3z" fill="#7F77DD"/></marker>
+        <marker id="ah" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0L0,6L8,3z" fill="#D85A30"/></marker>
+      </defs>
+      {edges.map((e,i)=><Arrow key={i} n1={nm[e.f]} n2={nm[e.t]} hi={hi&&(e.f===hi||e.t===hi)}/>)}
+      {nodes.map(n=>(
+        <g key={n.id} onClick={()=>onC&&onC(n.id)} style={{cursor:onC?"pointer":"default"}}>
+          <circle cx={n.x} cy={n.y} r={n.id.length>2?28:22}
+            fill={hi===n.id?"#EEEDFE":"var(--bg)"}
+            stroke={hi===n.id?"#534AB7":"#AFA9EC"} strokeWidth={hi===n.id?2.5:1.5}/>
+          <text x={n.x} y={n.y} textAnchor="middle" dominantBaseline="central"
+            fontSize={n.id.length>3?10:12} fontWeight="500" fill="#3C3489">{n.id}</text>
+          {n.label&&<text x={n.x} y={n.y+32} textAnchor="middle" fontSize="10" fill="#888">{n.label}</text>}
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+function Matrix({nodes,sol,exp,onDone}){
+  const n=nodes.length;
+  const[mat,setMat]=useState(()=>Array(n).fill(null).map(()=>Array(n).fill(null)));
+  const[rev,setRev]=useState(false);
+  const[ok,setOk]=useState(0);
+  function tog(r,c){
+    if(rev)return;
+    setMat(p=>{const m=p.map(r=>[...r]);m[r][c]=m[r][c]===1?0:m[r][c]===0?null:1;return m;});
+  }
+  function check(){
+    let c=0;
+    for(let r=0;r<n;r++)for(let cc=0;cc<n;cc++)if(mat[r][cc]===sol[r][cc])c++;
+    setOk(c);setRev(true);
+    if(c===n*n)onDone&&onDone();
+  }
+  return(
+    <div>
+      <p style={{fontSize:13,color:"var(--text2)",marginBottom:12}}>{exp}</p>
+      <p style={{fontSize:12,color:"var(--text2)",marginBottom:12}}>Cliquez : vide → 1 → 0 → vide</p>
+      <div style={{overflowX:"auto"}}>
+        <table style={{borderCollapse:"collapse",margin:"0 auto"}}>
+          <thead><tr><th style={{width:36}}></th>{nodes.map(n=><th key={n} style={{width:42,height:42,textAlign:"center",fontSize:14,fontWeight:500,color:"#7F77DD"}}>{n}</th>)}</tr></thead>
+          <tbody>{nodes.map((row,r)=>(
+            <tr key={row}>
+              <td style={{fontSize:14,fontWeight:500,color:"#7F77DD",paddingRight:8,textAlign:"right"}}>{row}</td>
+              {nodes.map((col,c)=>{
+                const v=mat[r][c],s=sol[r][c];
+                let bg=rev?(v===s?"#EAF3DE":"#FCEBEB"):v===1?"#EEEDFE":v===0?"#F1EFE8":"var(--bg2)";
+                return<td key={col} onClick={()=>tog(r,c)}
+                  style={{width:42,height:42,textAlign:"center",border:"1px solid var(--border)",
+                    background:bg,cursor:rev?"default":"pointer",fontSize:16,fontWeight:500,
+                    color:v===1?"#3C3489":"#888",transition:"background .2s",userSelect:"none"}}>
+                  {v===null?"":v}
+                </td>;
+              })}
+            </tr>
+          ))}</tbody>
+        </table>
+      </div>
+      {!rev
+        ?<button onClick={check} style={{marginTop:14,padding:"8px 22px",border:"1.5px solid #7F77DD",background:"#EEEDFE",borderRadius:8,cursor:"pointer",fontSize:14,color:"#3C3489",fontFamily:"inherit"}}>Vérifier</button>
+        :<div style={{marginTop:12,padding:"10px 14px",background:ok===n*n?"#EAF3DE":"#FAEEDA",borderRadius:8,fontSize:13,color:ok===n*n?"#27500A":"#633806"}}>
+          {ok===n*n?"✓ Parfait ! Matrice complète et correcte.":`${ok}/${n*n} cases correctes.`}
+        </div>
+      }
+    </div>
+  );
+}
+
+function Quiz({questions,onDone,ac="purple"}){
+  const[idx,setIdx]=useState(0);
+  const[sel,setSel]=useState(null);
+  const[ans,setAns]=useState(false);
+  const[sc,setSc]=useState(0);
+  const[done,setDone]=useState(false);
+  const[timer,setTimer]=useState(30);
+  const tr=useRef(null);
+  const c=C[ac];
+
+  useEffect(()=>{
+    if(ans||done)return;
+    tr.current=setInterval(()=>{setTimer(t=>{if(t<=1){clearInterval(tr.current);go(null);return 0;}return t-1;});},1000);
+    return()=>clearInterval(tr.current);
+  },[idx,ans,done]);
+
+  function go(i){clearInterval(tr.current);setSel(i);setAns(true);if(i===questions[idx].ok)setSc(s=>s+1);}
+  function next(){
+    const newSc=sc+(sel===questions[idx].ok?1:0);
+    if(idx+1>=questions.length){setDone(true);onDone&&onDone(newSc===questions.length?"perfect":"done");}
+    else{setIdx(i=>i+1);setSel(null);setAns(false);setTimer(30);}
+  }
+
+  if(done){
+    const fin=sc;
+    return(
+      <div style={{textAlign:"center",padding:"32px 0"}}>
+        <div style={{fontSize:42,marginBottom:8}}>{fin===questions.length?"🏆":fin>=questions.length/2?"👍":"📚"}</div>
+        <div style={{fontSize:22,fontWeight:500,marginBottom:4}}>{fin}/{questions.length}</div>
+        <div style={{fontSize:14,color:"var(--text2)",marginBottom:16}}>{fin===questions.length?"Score parfait ! +50 XP bonus":fin>=questions.length/2?"Bon travail !":"Relis les définitions !"}</div>
+        <div style={{display:"flex",justifyContent:"center",gap:8}}>
+          {questions.map((_,i)=><div key={i} style={{width:30,height:30,borderRadius:"50%",
+            background:i<fin?c.bg:"#F1EFE8",border:`2px solid ${i<fin?c.bd:"#CCC"}`,
+            display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,
+            color:i<fin?c.tx:"#888"}}>{i<fin?"✓":"✗"}</div>)}
+        </div>
+      </div>
+    );
+  }
+  const q=questions[idx];
+  return(
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:14}}>
+        <span style={{fontSize:13,color:"var(--text2)"}}>Q {idx+1}/{questions.length}</span>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <div style={{width:70,height:5,background:"var(--bg3)",borderRadius:3}}>
+            <div style={{width:`${(timer/30)*100}%`,height:"100%",background:timer<=10?"#E24B4A":c.bd,borderRadius:3,transition:"width 1s linear"}}/>
+          </div>
+          <span style={{fontSize:12,color:timer<=10?"#E24B4A":"var(--text2)"}}>{timer}s</span>
+        </div>
+      </div>
+      <div style={{padding:"14px 16px",background:c.bg,borderRadius:10,border:`1px solid ${c.bd}`,fontSize:15,fontWeight:500,color:c.dk,marginBottom:16}}>{q.q}</div>
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {q.ans.map((a,i)=>{
+          let bg="var(--bg)",bd="var(--border)",tx="var(--text)";
+          if(ans){if(i===q.ok){bg="#EAF3DE";bd="#639922";tx="#27500A";}else if(i===sel){bg="#FCEBEB";bd="#E24B4A";tx="#A32D2D";}}
+          return<button key={i} onClick={()=>!ans&&go(i)}
+            style={{textAlign:"left",padding:"11px 14px",border:`1.5px solid ${bd}`,background:bg,
+              borderRadius:8,cursor:ans?"default":"pointer",fontSize:14,color:tx,fontFamily:"inherit",transition:"all .2s"}}>
+            <span style={{fontWeight:500,marginRight:8,color:bd}}>{["A","B","C","D"][i]}.</span>{a}
+          </button>;
+        })}
+      </div>
+      {ans&&<div style={{marginTop:14}}>
+        <div style={{padding:"10px 14px",background:sel===q.ok?"#EAF3DE":"#FAEEDA",borderRadius:8,fontSize:13,color:sel===q.ok?"#27500A":"#633806",marginBottom:10}}>
+          {sel===q.ok?"✓ Correct ! ":"✗ Incorrect. "}{q.exp}
+        </div>
+        <button onClick={next} style={{padding:"8px 22px",border:`1.5px solid ${c.bd}`,background:c.bg,borderRadius:8,cursor:"pointer",fontSize:14,color:c.tx,fontFamily:"inherit"}}>
+          {idx+1<questions.length?"Question suivante →":"Voir résultats →"}
+        </button>
+      </div>}
+    </div>
+  );
+}
+
+function Section({sec,lesson,onDone}){
+  const c=C[lesson.color];
+  switch(sec.type){
+    case"hook":return(
+      <div>
+        <div style={{padding:"18px",background:c.bg,borderRadius:10,border:`1.5px solid ${c.bd}`,marginBottom:18}}>
+          <div style={{fontSize:17,fontWeight:500,color:c.dk,marginBottom:8}}>{sec.content.question}</div>
+          <div style={{fontSize:14,color:c.tx}}>{sec.content.context}</div>
+        </div>
+        <GViz nodes={sec.content.nodes} edges={sec.content.edges}/>
+        <button onClick={onDone} style={{marginTop:14,padding:"8px 20px",border:`1.5px solid ${c.bd}`,background:c.bg,borderRadius:8,cursor:"pointer",fontSize:14,color:c.tx,fontFamily:"inherit"}}>Compris →</button>
+      </div>
+    );
+    case"learn":return(
+      <div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(230px,1fr))",gap:12}}>
+          {sec.cards.map((card,i)=>{const cc=C[card.color];return(
+            <div key={i} style={{padding:"14px",background:cc.bg,borderRadius:10,border:`1px solid ${cc.bd}`}}>
+              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+                <span style={{fontSize:18,color:cc.bd}}>{card.sym}</span>
+                <span style={{fontSize:14,fontWeight:500,color:cc.dk}}>{card.term}</span>
+              </div>
+              <p style={{margin:0,fontSize:13,color:cc.tx,lineHeight:1.6}}>{card.def}</p>
+            </div>
+          );})}
+        </div>
+        <button onClick={onDone} style={{marginTop:18,padding:"8px 20px",border:`1.5px solid ${c.bd}`,background:c.bg,borderRadius:8,cursor:"pointer",fontSize:14,color:c.tx,fontFamily:"inherit"}}>J'ai mémorisé →</button>
+      </div>
+    );
+    case"igraph":{
+      const[hi,setHi]=useState(null);
+      const g=sec.graph;
+      const info=hi?g.table[hi]:null;
+      return(
+        <div>
+          <p style={{fontSize:13,color:"var(--text2)",marginBottom:12}}>Cliquez sur un sommet pour voir ses prédécesseurs et successeurs.</p>
+          <GViz nodes={g.nodes} edges={g.edges} hi={hi} onC={setHi}/>
+          {info&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:12}}>
+            <div style={{padding:"12px 14px",background:"#E1F5EE",borderRadius:8,border:"1px solid #1D9E75"}}>
+              <div style={{fontSize:11,color:"#0F6E56",fontWeight:500,marginBottom:4}}>Successeurs Γ⁺({hi})</div>
+              <div style={{fontSize:14,fontWeight:500,color:"#085041"}}>{"{"}{info.s.join(", ")}{"}"}</div>
+            </div>
+            <div style={{padding:"12px 14px",background:"#EEEDFE",borderRadius:8,border:"1px solid #7F77DD"}}>
+              <div style={{fontSize:11,color:"#534AB7",fontWeight:500,marginBottom:4}}>Prédécesseurs Γ⁻({hi})</div>
+              <div style={{fontSize:14,fontWeight:500,color:"#26215C"}}>{"{"}{info.p.join(", ")}{"}"}</div>
+            </div>
+          </div>}
+          <button onClick={onDone} style={{marginTop:14,padding:"8px 20px",border:`1.5px solid ${c.bd}`,background:c.bg,borderRadius:8,cursor:"pointer",fontSize:14,color:c.tx,fontFamily:"inherit"}}>Continuer →</button>
+        </div>
+      );
+    }
+    case"matrix":return<Matrix nodes={sec.nodes} sol={sec.sol} exp={sec.exp} onDone={onDone}/>;
+    case"quiz":return<Quiz questions={sec.questions} onDone={onDone} ac={lesson.color}/>;
+    case"dst":return(
+      <div>
+        <div style={{padding:"12px 14px",background:"#FAEEDA",borderRadius:8,border:"1px solid #BA7517",fontSize:13,color:"#633806",marginBottom:14,fontWeight:500}}>⚡ Mode avant DST — l'essentiel en 30 secondes</div>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {sec.points.map((p,i)=>(
+            <div key={i} style={{display:"flex",alignItems:"flex-start",gap:12,padding:"10px 14px",background:c.bg,borderRadius:8,border:`1px solid ${c.bd}`}}>
+              <span style={{fontSize:15,fontWeight:700,color:c.tx,minWidth:28,textAlign:"center"}}>{p.icon}</span>
+              <span style={{fontSize:14,color:c.dk,lineHeight:1.5}}>{p.tx}</span>
+            </div>
+          ))}
+        </div>
+        <button onClick={onDone} style={{marginTop:14,padding:"8px 20px",border:`1.5px solid ${c.bd}`,background:c.bg,borderRadius:8,cursor:"pointer",fontSize:14,color:c.tx,fontFamily:"inherit"}}>Fiche terminée ✓</button>
+      </div>
+    );
+    default:return null;
+  }
+}
+
+function Lesson({lesson,back,add}){
+  const[si,setSI]=useState(0);
+  const[done,setDone]=useState(new Set());
+  const c=C[lesson.color];
+  const sec=lesson.sections[si];
+
+  function markDone(res){
+    if(!done.has(sec.id)){
+      setDone(p=>new Set([...p,sec.id]));
+      add(20,sec.id==="quiz"?"Quiz Master":null);
+      if(res==="perfect")add(50,"Parfait !");
+    }
+  }
+
+  return(
+    <div style={{padding:20}}>
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
+        <button onClick={back} style={{padding:"6px 12px",border:"1px solid var(--border)",background:"transparent",borderRadius:6,cursor:"pointer",fontSize:13,color:"var(--text2)",fontFamily:"inherit"}}>← Retour</button>
+        <h2 style={{margin:0,fontSize:19,fontWeight:500,color:"var(--text)"}}>{lesson.title}</h2>
+      </div>
+      <div style={{display:"flex",gap:6,marginBottom:20,overflowX:"auto",paddingBottom:4}}>
+        {lesson.sections.map((s,i)=>{
+          const d=done.has(s.id),act=i===si;
+          return<button key={s.id} onClick={()=>setSI(i)}
+            style={{padding:"5px 12px",border:`1.5px solid ${act?c.bd:d?"#639922":"var(--border)"}`,
+              background:act?c.bg:d?"#EAF3DE":"transparent",borderRadius:20,cursor:"pointer",
+              fontSize:12,whiteSpace:"nowrap",color:act?c.dk:d?"#27500A":"var(--text2)",
+              fontWeight:act?500:400,fontFamily:"inherit"}}>
+            {d?"✓ ":""}{s.label}
+          </button>;
+        })}
+      </div>
+      <div style={{background:"var(--bg)",border:"0.5px solid var(--border)",borderRadius:12,padding:22}}>
+        <h3 style={{margin:"0 0 18px",fontSize:15,fontWeight:500,color:"var(--text)"}}>{sec.label}</h3>
+        <Section key={si} sec={sec} lesson={lesson} onDone={markDone}/>
+      </div>
+      <div style={{display:"flex",justifyContent:"space-between",marginTop:14}}>
+        <button disabled={si===0} onClick={()=>setSI(i=>i-1)}
+          style={{padding:"7px 14px",border:"1px solid var(--border)",background:"transparent",borderRadius:8,cursor:si===0?"not-allowed":"pointer",opacity:si===0?0.4:1,fontSize:13,color:"var(--text2)",fontFamily:"inherit"}}>← Précédent</button>
+        <span style={{fontSize:13,color:"var(--text2)",alignSelf:"center"}}>{si+1}/{lesson.sections.length}</span>
+        <button disabled={si===lesson.sections.length-1} onClick={()=>setSI(i=>i+1)}
+          style={{padding:"7px 14px",border:`1px solid ${c.bd}`,background:c.bg,borderRadius:8,cursor:si===lesson.sections.length-1?"not-allowed":"pointer",opacity:si===lesson.sections.length-1?0.4:1,fontSize:13,color:c.tx,fontFamily:"inherit"}}>Suivant →</button>
+      </div>
+    </div>
+  );
+}
+
+function App(){
+  const{xp,lv,badges,add}=useXP();
+  const[screen,setScreen]=useState("home");
+  const[les,setLes]=useState(null);
+  const LESSONS={"graphes-bases":LG,"pert":LP};
+  const lv_pct=Math.round(((xp-(lv-1)*100)/100)*100);
+
+  return(
+    <div style={{minHeight:"100vh",background:"var(--bg2)"}}>
+      <div style={{background:"var(--bg3)",borderBottom:"0.5px solid var(--border)",padding:"8px 16px",display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <div style={{width:30,height:30,borderRadius:"50%",background:"#EEEDFE",border:"2px solid #7F77DD",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:500,color:"#3C3489"}}>{lv}</div>
+          <div>
+            <div style={{fontSize:10,color:"var(--text2)"}}>Niv {lv}</div>
+            <div style={{display:"flex",alignItems:"center",gap:6}}>
+              <div style={{width:70,height:4,background:"var(--bg2)",borderRadius:2}}>
+                <div style={{width:`${lv_pct}%`,height:"100%",background:"#7F77DD",borderRadius:2}}/>
+              </div>
+              <span style={{fontSize:10,color:"var(--text2)"}}>{xp} XP</span>
+            </div>
+          </div>
+        </div>
+        {badges.slice(-4).map((b,i)=><span key={i} style={{fontSize:11,padding:"2px 8px",background:"#FAEEDA",color:"#633806",borderRadius:10,border:"1px solid #BA7517"}}>{b}</span>)}
+      </div>
+
+      {screen==="home"&&(
+        <div style={{maxWidth:560,margin:"0 auto",padding:"40px 20px",textAlign:"center"}}>
+          <div style={{display:"inline-block",padding:"4px 14px",background:"#EEEDFE",borderRadius:20,fontSize:12,color:"#534AB7",marginBottom:22,border:"1px solid #AFA9EC"}}>Graphes et ordonnancement · BTS SIO</div>
+          <h1 style={{margin:"0 0 14px",fontSize:30,fontWeight:500,color:"var(--text)",lineHeight:1.2}}>Révise efficacement,<br/>retiens durablement.</h1>
+          <p style={{margin:"0 0 28px",fontSize:15,color:"var(--text2)",lineHeight:1.7}}>Fiches interactives, quiz chronométrés, visualisations SVG et mode avant DST — maîtrise les graphes en une session.</p>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:28}}>
+            {[{i:"◎",l:"4 chapitres",s:"Graphes → PERT"},{i:"▶",l:"Quiz chrono",s:"Feedback immédiat"},{i:"★",l:"Gamifié",s:"XP + Badges"}].map((f,i)=>(
+              <div key={i} style={{padding:"14px 10px",background:"var(--bg)",borderRadius:10,border:"0.5px solid var(--border)"}}>
+                <div style={{fontSize:20,color:"#7F77DD",marginBottom:4}}>{f.i}</div>
+                <div style={{fontSize:13,fontWeight:500,color:"var(--text)"}}>{f.l}</div>
+                <div style={{fontSize:11,color:"var(--text2)"}}>{f.s}</div>
+              </div>
+            ))}
+          </div>
+          <button onClick={()=>setScreen("chapters")} style={{padding:"12px 34px",background:"#EEEDFE",border:"1.5px solid #7F77DD",borderRadius:10,cursor:"pointer",fontSize:15,fontWeight:500,color:"#3C3489",fontFamily:"inherit"}}>Commencer à réviser →</button>
+        </div>
+      )}
+
+      {screen==="chapters"&&(
+        <div style={{maxWidth:660,margin:"0 auto",padding:24}}>
+          <div style={{marginBottom:20}}>
+            <h2 style={{margin:"0 0 4px",fontSize:19,fontWeight:500,color:"var(--text)"}}>Choisir un chapitre</h2>
+            <p style={{margin:0,fontSize:14,color:"var(--text2)"}}>Commence par les bases, avance à ton rythme.</p>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(250px,1fr))",gap:14}}>
+            {CHAPTERS.map(ch=>{
+              const cc=C[ch.color];
+              const avail=!!LESSONS[ch.id];
+              return(
+                <div key={ch.id} onClick={()=>avail&&(setLes(LESSONS[ch.id]),setScreen("lesson"))}
+                  style={{padding:"18px",background:"var(--bg)",border:`0.5px solid ${avail?"var(--border)":"var(--border)"}`,borderRadius:12,cursor:avail?"pointer":"default",opacity:avail?1:0.55}}>
+                  {!avail&&<div style={{position:"relative",float:"right",background:"var(--bg3)",borderRadius:10,padding:"2px 8px",fontSize:10,color:"var(--text2)"}}>Bientôt</div>}
+                  <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
+                    <div style={{width:42,height:42,borderRadius:10,background:cc.bg,border:`1px solid ${cc.bd}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,color:cc.tx}}>{ch.icon}</div>
+                    <div>
+                      <div style={{fontSize:14,fontWeight:500,color:"var(--text)"}}>{ch.title}</div>
+                      <div style={{fontSize:12,color:"var(--text2)"}}>{ch.sub}</div>
+                    </div>
+                  </div>
+                  <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                    <span style={{fontSize:11,padding:"3px 8px",background:cc.bg,color:cc.tx,borderRadius:10,border:`1px solid ${cc.bd}`}}>{ch.diff}</span>
+                    <span style={{fontSize:11,padding:"3px 8px",background:"#FAEEDA",color:"#633806",borderRadius:10,border:"1px solid #BA7517"}}>+{ch.xp} XP</span>
+                    <span style={{fontSize:11,padding:"3px 8px",background:"var(--bg2)",color:"var(--text2)",borderRadius:10}}>{ch.n} sections</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {screen==="lesson"&&les&&(
+        <div style={{maxWidth:700,margin:"0 auto"}}>
+          <Lesson lesson={les} back={()=>setScreen("chapters")} add={add}/>
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
